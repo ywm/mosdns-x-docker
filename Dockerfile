@@ -26,8 +26,19 @@ COPY --from=builder /mosdns /usr/bin/mosdns
 # 复制入口脚本
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 
-# 安装依赖(git, cron)，克隆配置，移动文件，授权脚本，然后清理
+# 新增：将仓库根目录的 Cloudflare Origin CA 证书复制到镜像中
+# 我们将其重命名为 .crt 后缀，这是 Alpine 系统推荐的格式
+COPY origin_ca_rsa_root.pem /usr/local/share/ca-certificates/cloudflare-origin-ca-rsa.crt
+COPY origin_ca_ecc_root.pem /usr/local/share/ca-certificates/cloudflare-origin-ca-ecc.crt
+
+# 安装依赖，更新证书，克隆配置，移动文件，授权脚本，然后清理
+# 注意：curl 工具已不再需要安装
 RUN apk add --no-cache ca-certificates tzdata git busybox-suid && \
+    \
+    # 更新系统证书信任列表，让刚才复制进去的证书生效
+    echo "Updating CA certificates from local files..." && \
+    update-ca-certificates && \
+    \
     echo "Cloning configuration repository from pmkol/easymosdns..." && \
     git clone --depth 1 https://github.com/pmkol/easymosdns.git /tmp/easymosdns && \
     mkdir -p /etc/mosdns && \
@@ -36,7 +47,7 @@ RUN apk add --no-cache ca-certificates tzdata git busybox-suid && \
     chmod +x /etc/mosdns/rules/update && \
     chmod +x /etc/mosdns/rules/update-cdn && \
     chmod +x /usr/local/bin/entrypoint.sh && \
-    # 清理临时目录和不再需要的 git
+    # 清理临时目录和不再需要的包
     rm -rf /tmp/easymosdns && \
     apk del git
 
