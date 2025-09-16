@@ -44,8 +44,6 @@ docker logs -f mosdns-x
 
 ---
 
- 
-
 ## 运行原理与默认行为
 
 - 入口命令：`CMD ["/usr/bin/mosdns", "start", "--dir", "/etc/mosdns"]`
@@ -61,16 +59,13 @@ docker logs -f mosdns-x
 - 定时更新：使用标准 cron 表达式设置 `crontab`、`crontabcnd`，例如 `0 4 * * *`。
 - 时区：镜像包含 `tzdata`，可通过设置 `TZ` 环境变量（如 `Asia/Shanghai`）影响 cron 与日志时间。
 
-```sh
-docker run -d \
-  --name mosdns-x \
-  -e TZ=Asia/Shanghai \
-  -e crontab="0 4 * * *" \
-  #-e crontabcnd="0 3 * * *" \
-  -p 53:53/udp -p 53:53/tcp \
-  -v /your/config/dir:/etc/mosdns \
-  ghcr.io/787a68/mosdns-x:latest
-```
+### 挂载与数据初始化
+
+- **首次启动初始化**：当您将一个**空目录**挂载到容器的 `/etc/mosdns` 路径时，入口脚本会检测到这是一个“首次运行”场景。它会自动将镜像内预置的所有默认配置文件、规则列表和更新脚本完整地复制到您挂载的目录中。这确保了服务可以“开箱即用”。
+
+- **持久化与自定义**：在首次启动后，您可以直接修改挂载目录中的任何文件（如 `config.yaml` 或规则文件）。后续重启容器时，脚本会检测到目录非空，并**跳过**自动复制，从而安全地保留您的所有自定义修改。
+
+- **重要提示**：请始终通过挂载**整个目录** (`-v /your/config/dir:/etc/mosdns`) 的方式来管理配置。**不要只挂载单个文件**，这种操作会阻止初始化流程，导致 `mosdns` 因缺少必要的依赖文件而启动失败。
 
 ---
 
