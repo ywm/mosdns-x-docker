@@ -31,6 +31,9 @@ if [ ! -x "$CONFIG_DIR/rules/update-cdn" ]; then
     chmod +x "$CONFIG_DIR/rules/update-cdn"
 fi
 
+echo "Ensuring correct ownership for $CONFIG_DIR..."
+chown -R nobody:nogroup "$CONFIG_DIR"
+
 CRONTAB_FILE="/etc/crontabs/root"
 
 # 动态生成 crontab 配置文件
@@ -54,6 +57,8 @@ else
     echo "No cron jobs defined."
 fi
 
-echo "Starting mosdns service..."
-# 执行 CMD 传入的命令，即启动 mosdns
-exec "$@"
+echo "Dropping privileges and starting mosdns service as user 'nobody'..."
+# 使用 su-exec (由 busybox-suid 提供) 来降低权限，
+# 以 'nobody' 用户身份执行 CMD 传入的命令 (即 mosdns start)。
+# 这是安全最佳实践，可避免以 root 身份运行网络服务。
+exec su-exec nobody:nogroup "$@"
