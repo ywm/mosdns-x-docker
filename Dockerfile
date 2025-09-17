@@ -31,13 +31,9 @@ COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY origin_ca_rsa_root.pem /usr/local/share/ca-certificates/cloudflare-origin-ca-rsa.crt
 COPY origin_ca_ecc_root.pem /usr/local/share/ca-certificates/cloudflare-origin-ca-ecc.crt
 
-# 安装依赖，更新证书，克隆默认配置，授权脚本，然后清理
-RUN apk add --no-cache ca-certificates tzdata git busybox-suid && \
-    \
-    # 更新系统证书信任列表，让刚才复制进去的证书生效
+RUN apk add --no-cache ca-certificates tzdata git busybox-suid su-exec && \
+    echo "Updating CA certificates from local files..." && \
     update-ca-certificates && \
-    \
-    # 克隆默认配置文件到 /opt/easymosdns，以便在容器启动时按需复制
     echo "Cloning default configuration from pmkol/easymosdns to /opt/easymosdns..." && \
     git clone --depth 1 https://github.com/pmkol/easymosdns.git /opt/easymosdns && \
     # 确保更新脚本和入口脚本有可执行权限
