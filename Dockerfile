@@ -31,7 +31,7 @@ COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY origin_ca_rsa_root.pem /usr/local/share/ca-certificates/cloudflare-origin-ca-rsa.crt
 COPY origin_ca_ecc_root.pem /usr/local/share/ca-certificates/cloudflare-origin-ca-ecc.crt
 
-RUN apk add --no-cache ca-certificates tzdata git busybox-suid su-exec && \
+RUN apk add --no-cache ca-certificates tzdata git busybox-suid && \
     echo "Updating CA certificates from local files..." && \
     update-ca-certificates && \
     echo "Cloning default configuration from pmkol/easymosdns to /opt/easymosdns..." && \
