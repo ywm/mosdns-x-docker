@@ -40,13 +40,13 @@ CRONTAB_FILE="/etc/crontabs/root"
 # 将日志输出重定向到容器的标准输出流，方便通过 docker logs 查看
 echo "Initializing cron jobs..."
 if [ -n "$crontab" ]; then
-    echo "$crontab $CONFIG_DIR/rules/update &gt;&gt; /proc/1/fd/1 2&gt;&gt; /proc/1/fd/2" &gt;&gt; "$CRONTAB_FILE"
-    echo "  -&gt; Scheduled direct update: '$crontab'"
+    echo "$crontab $CONFIG_DIR/rules/update >> /proc/1/fd/1 2>&1" >> "$CRONTAB_FILE"
+    echo "  -> Scheduled direct update: '$crontab'"
 fi
 
 if [ -n "$crontabcnd" ]; then
-    echo "$crontabcnd $CONFIG_DIR/rules/update-cdn &gt;&gt; /proc/1/fd/1 2&gt;&gt; /proc/1/fd/2" &gt;&gt; "$CRONTAB_FILE"
-    echo "  -&gt; Scheduled CDN update: '$crontabcnd'"
+    echo "$crontabcnd $CONFIG_DIR/rules/update-cdn >> /proc/1/fd/1 2>&1" >> "$CRONTAB_FILE"
+    echo "  -> Scheduled CDN update: '$crontabcnd'"
 fi
 
 # 如果定义了任何 cron 任务，则启动 cron 守护进程
