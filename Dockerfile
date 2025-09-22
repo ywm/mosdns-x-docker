@@ -1,57 +1,67 @@
-# 使用 ARG 接收来自 build 命令的参数
-ARG VERSION
+# ===========================
+# 构建参数
+# ===========================
 ARG TARGETARCH
+ARG MOSDNS_COMMIT
 
-# --- 构建阶段 ---
-# 此阶段负责根据架构下载对应的二进制文件
-FROM alpine:latest AS builder
-ARG VERSION
+# ===========================
+# 构建阶段：从源码编译 mosdns
+# ===========================
+FROM golang:1.21-alpine AS builder
 ARG TARGETARCH
+ARG MOSDNS_COMMIT
 
-# 安装下载和解压所需的工具
-RUN apk add --no-cache curl unzip
+# 安装编译依赖
+RUN apk add --no-cache git bash build-base curl
 
-# 下载 mosdns-x 的预编译二进制文件
-RUN curl -sSL "https://github.com/pmkol/mosdns-x/releases/download/${VERSION}/mosdns-linux-${TARGETARCH}.zip" -o mosdns.zip && \
-    unzip mosdns.zip mosdns && \
-    chmod +x mosdns
+WORKDIR /build
 
-# --- 最终镜像阶段 ---
-# 这是最终发布的镜像，基于轻量的 alpine
+# 克隆 mosdns-x 源码
+RUN git clone https://github.com/pmkol/mosdns-x.git
+WORKDIR /build/mosdns-x
+
+# checkout commit hash（可指定 version 文件）
+RUN if [ -n "$MOSDNS_COMMIT" ]; then git checkout $MOSDNS_COMMIT; fi
+
+# 编译 mosdns 二进制
+RUN GOOS=linux GOARCH=${TARGETARCH} CGO_ENABLED=0 go build -o mosdns ./cmd/mosdns
+
+# ===========================
+# 最终镜像阶段
+# ===========================
 FROM alpine:latest
 
-# 从构建阶段复制 mosdns 可执行文件
-COPY --from=builder /mosdns /usr/bin/mosdns
+ARG TARGETARCH
+
+# 安装运行依赖
+RUN apk add --no-cache tzdata busybox-suid curl git
+
+# 下载最新通用 CA 证书并更新系统 CA
+RUN curl -o /usr/local/share/ca-certificates/cacert.crt https://curl.se/ca/cacert.pem && \
+    update-ca-certificates
+
+# 从构建阶段复制 mosdns 到 /usr/local/bin
+COPY --from=builder /build/mosdns-x/mosdns /usr/local/bin/mosdns
+RUN chmod +x /usr/local/bin/mosdns
 
 # 复制入口脚本
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
 
-# 新增：将仓库根目录的 Cloudflare Origin CA 证书复制到镜像中
-# 我们将其重命名为 .crt 后缀，这是 Alpine 系统推荐的格式
-COPY origin_ca_rsa_root.pem /usr/local/share/ca-certificates/cloudflare-origin-ca-rsa.crt
-COPY origin_ca_ecc_root.pem /usr/local/share/ca-certificates/cloudflare-origin-ca-ecc.crt
-
-RUN apk add --no-cache ca-certificates tzdata git busybox-suid && \
-    echo "Updating CA certificates from local files..." && \
-    update-ca-certificates && \
-    echo "Cloning default configuration from pmkol/easymosdns to /opt/easymosdns..." && \
-    git clone --depth 1 https://github.com/pmkol/easymosdns.git /opt/easymosdns && \
-    # 确保更新脚本和入口脚本有可执行权限
-    chmod +x /opt/easymosdns/rules/update && \
-    chmod +x /opt/easymosdns/rules/update-cdn && \
-    chmod +x /usr/local/bin/entrypoint.sh && \
-    # 清理不再需要的包
+# 克隆 easymosdns 默认配置
+RUN git clone --depth 1 https://github.com/pmkol/easymosdns.git /opt/easymosdns && \
+    chmod +x /opt/easymosdns/rules/update /opt/easymosdns/rules/update-cdn && \
     apk del git
 
-# 声明配置文件卷
+# 声明配置卷
 VOLUME /etc/mosdns
 
-# 暴露 DNS 服务端口
+# 暴露 DNS 服务端口（容器内部固定为 53）
+# 宿主机可通过 -p <host_port>:53 映射到任意端口，例如 -p 1953:53
 EXPOSE 53/tcp
 EXPOSE 53/udp
 
-# 设置容器的入口点
+# 设置入口和默认命令
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+CMD ["/usr/local/bin/mosdns", "start", "--dir", "/etc/mosdns"]
 
-# 设置默认执行的命令，它将被传递给入口脚本
-CMD ["/usr/bin/mosdns", "start", "--dir", "/etc/mosdns"]
