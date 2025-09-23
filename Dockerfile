@@ -1,67 +1,66 @@
-# ===========================
-# 构建参数
-# ===========================
-ARG TARGETARCH
-ARG MOSDNS_COMMIT
+# ====== 构建阶段 ======
+FROM ubuntu:22.04 AS builder
 
-# ===========================
-# 构建阶段：从源码编译 mosdns
-# ===========================
-FROM golang:1.21-alpine AS builder
-ARG TARGETARCH
-ARG MOSDNS_COMMIT
+ARG TARGETARCH=amd64
+ARG MOSDNS_COMMIT=""
 
-# 安装编译依赖
-RUN apk add --no-cache git bash build-base curl
+ENV DEBIAN_FRONTEND=noninteractive
+ARG GO_VERSION=1.25.1
+
+# 安装构建依赖
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git curl build-essential ca-certificates bash \
+ && rm -rf /var/lib/apt/lists/*
+
+# 安装官方 Go 1.25.1
+RUN curl -sSL https://golang.org/dl/go${GO_VERSION}.linux-amd64.tar.gz | tar -C /usr/local -xzf - \
+ && ln -s /usr/local/go/bin/go /usr/bin/go \
+ && go version
 
 WORKDIR /build
 
-# 克隆 mosdns-x 源码
+# 克隆源码
 RUN git clone https://github.com/pmkol/mosdns-x.git
 WORKDIR /build/mosdns-x
 
-# checkout commit hash（可指定 version 文件）
+# 检出 commit（如果传入）
 RUN if [ -n "$MOSDNS_COMMIT" ]; then git checkout $MOSDNS_COMMIT; fi
 
-# 编译 mosdns 二进制
-RUN GOOS=linux GOARCH=${TARGETARCH} CGO_ENABLED=0 go build -o mosdns ./cmd/mosdns
+# 编译 mosdns
+RUN GOOS=linux GOARCH=${TARGETARCH} CGO_ENABLED=0 go build -o mosdns ./main.go
 
-# ===========================
-# 最终镜像阶段
-# ===========================
-FROM alpine:latest
+# ====== 运行阶段 ======
+FROM ubuntu:22.04
 
-ARG TARGETARCH
+ENV DEBIAN_FRONTEND=noninteractive
 
-# 安装运行依赖
-RUN apk add --no-cache tzdata busybox-suid curl git
+# 安装运行所需依赖
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates tzdata git busybox sudo bash \
+ && rm -rf /var/lib/apt/lists/*
 
-# 下载最新通用 CA 证书并更新系统 CA
-RUN curl -o /usr/local/share/ca-certificates/cacert.crt https://curl.se/ca/cacert.pem && \
-    update-ca-certificates
-
-# 从构建阶段复制 mosdns 到 /usr/local/bin
-COPY --from=builder /build/mosdns-x/mosdns /usr/local/bin/mosdns
-RUN chmod +x /usr/local/bin/mosdns
-
-# 复制入口脚本
-COPY entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh
+WORKDIR /app
 
 # 克隆 easymosdns 默认配置
-RUN git clone --depth 1 https://github.com/pmkol/easymosdns.git /opt/easymosdns && \
-    chmod +x /opt/easymosdns/rules/update /opt/easymosdns/rules/update-cdn && \
-    apk del git
+RUN git clone --depth 1 https://github.com/pmkol/easymosdns.git /opt/easymosdns \
+ && chmod +x /opt/easymosdns/rules/update \
+ && chmod +x /opt/easymosdns/rules/update-cdn
+
+# 拷贝 mosdns 可执行文件
+COPY --from=builder /build/mosdns-x/mosdns /usr/bin/mosdns
+
+# 拷贝入口脚本
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
 
 # 声明配置卷
 VOLUME /etc/mosdns
 
-# 暴露 DNS 服务端口（容器内部固定为 53）
-# 宿主机可通过 -p <host_port>:53 映射到任意端口，例如 -p 1953:53
-EXPOSE 53/tcp
-EXPOSE 53/udp
+# 暴露 DNS 端口
+EXPOSE 53/tcp 53/udp
 
-# 设置入口和默认命令
+# 设置入口
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
-CMD ["/usr/local/bin/mosdns", "start", "--dir", "/etc/mosdns"]
 
+# 默认 CMD
+CMD ["/usr/bin/mosdns", "start", "--dir", "/etc/mosdns"]
