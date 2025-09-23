@@ -1,25 +1,30 @@
 name: Build and Push mosdns-x from Source
 
 on:
+  # 每天凌晨3点定时运行
   schedule:
     - cron: '0 3 * * *'
+  # 手动触发
   workflow_dispatch:
 
 jobs:
-  build:
+  check-and-build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout this repository
         uses: actions/checkout@v4
 
+      # 检查是否需要构建
       - name: Determine if build is needed
         id: check_build
         run: |
+          # 获取 upstream 最新 commit hash
           LATEST_COMMIT=$(git ls-remote https://github.com/pmkol/mosdns-x.git HEAD | awk '{print $1}')
           echo "Latest upstream commit: $LATEST_COMMIT"
 
           BUILD_NEEDED=false
+          # 如果 version 文件不存在或为空，则需要构建
           if [ ! -f version ] || [ -z "$(cat version)" ]; then
             BUILD_NEEDED=true
           else
@@ -30,18 +35,19 @@ jobs:
           echo "build_needed=$BUILD_NEEDED" >> $GITHUB_OUTPUT
           echo "latest_commit=$LATEST_COMMIT" >> $GITHUB_OUTPUT
 
+      # 如果不需要构建则退出
       - name: Exit if no build needed
         if: steps.check_build.outputs.build_needed == 'false'
-        run: exit 0
+        run: |
+          echo "No build needed. Exiting workflow."
+          exit 0
 
-      - name: Update version file
-        if: steps.check_build.outputs.build_needed == 'true'
-        run: echo "${{ steps.check_build.outputs.latest_commit }}" > version
-
+      # 设置 Docker Buildx
       - name: Set up Docker Buildx
         if: steps.check_build.outputs.build_needed == 'true'
         uses: docker/setup-buildx-action@v3
 
+      # 登录 GitHub Container Registry
       - name: Login to GitHub Container Registry
         if: steps.check_build.outputs.build_needed == 'true'
         uses: docker/login-action@v3
@@ -50,6 +56,7 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # 构建并推送 Docker 镜像
       - name: Build and push Docker image
         if: steps.check_build.outputs.build_needed == 'true'
         uses: docker/build-push-action@v6
@@ -64,3 +71,10 @@ jobs:
           tags: |
             ghcr.io/${{ github.repository_owner }}/mosdns-x-docker:${{ steps.check_build.outputs.latest_commit }}
             ghcr.io/${{ github.repository_owner }}/mosdns-x-docker:latest
+
+      # 构建成功后更新 version 文件
+      - name: Update version file
+        if: steps.check_build.outputs.build_needed == 'true'
+        run: |
+          echo "${{ steps.check_build.outputs.latest_commit }}" > version
+          echo "version file updated to latest commit"
