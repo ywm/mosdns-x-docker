@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Checkout 仓库，使用自定义 GHTOKEN，不使用默认 GITHUB_TOKEN
+      # Checkout 仓库，使用自定义 PAT，保证可以推送 version 文件
       - name: Checkout this repository
         uses: actions/checkout@v4
         with:
@@ -36,8 +36,12 @@ jobs:
             [ "$CURRENT_COMMIT" != "$LATEST_COMMIT" ] && BUILD_NEEDED=true
           fi
 
+          # 保存用于 Docker tag 的 commit-hash + 日期
+          DOCKER_TAG="${LATEST_COMMIT}-$(date +'%Y%m%d')"
+
           echo "build_needed=$BUILD_NEEDED" >> $GITHUB_OUTPUT
           echo "latest_commit=$LATEST_COMMIT" >> $GITHUB_OUTPUT
+          echo "DOCKER_TAG=$DOCKER_TAG" >> $GITHUB_OUTPUT
 
       # 如果不需要构建则退出
       - name: Exit if no build needed
@@ -73,11 +77,11 @@ jobs:
             MOSDNS_COMMIT=${{ steps.check_build.outputs.latest_commit }}
             TARGETARCH=amd64
           tags: |
-            ghcr.io/${{ github.repository_owner }}/mosdns-x-docker:${{ steps.check_build.outputs.latest_commit }}-$(date +'%Y%m%d')
+            ghcr.io/${{ github.repository_owner }}/mosdns-x-docker:${{ steps.check_build.outputs.DOCKER_TAG }}
             ghcr.io/${{ github.repository_owner }}/mosdns-x-docker:latest
 
       # 构建成功后更新 version 文件并推送到仓库
-      - name: Update version file
+      - name: Update version file and commit
         if: steps.check_build.outputs.build_needed == 'true'
         run: |
           echo "${{ steps.check_build.outputs.latest_commit }}" > version
@@ -86,5 +90,3 @@ jobs:
           git add version
           git commit -m "Update version to ${{ steps.check_build.outputs.latest_commit }}"
           git push
-        env:
-          GITHUB_TOKEN: ${{ secrets.GHTOKEN }}
