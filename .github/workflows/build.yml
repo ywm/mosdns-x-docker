@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Checkout 仓库，使用自定义 PAT，保证可以推送 version 文件
+      # Checkout 仓库，使用自定义 GHTOKEN
       - name: Checkout this repository
         uses: actions/checkout@v4
         with:
@@ -37,11 +37,10 @@ jobs:
           fi
 
           # 保存用于 Docker tag 的 commit-hash + 日期
-          DOCKER_TAG="${LATEST_COMMIT}-$(date +'%Y%m%d')"
-
+          DOCKER_TAG="${LATEST_COMMIT}_$(date +'%Y%m%d')"
+          echo "DOCKER_TAG=$DOCKER_TAG" >> $GITHUB_OUTPUT
           echo "build_needed=$BUILD_NEEDED" >> $GITHUB_OUTPUT
           echo "latest_commit=$LATEST_COMMIT" >> $GITHUB_OUTPUT
-          echo "DOCKER_TAG=$DOCKER_TAG" >> $GITHUB_OUTPUT
 
       # 如果不需要构建则退出
       - name: Exit if no build needed
@@ -90,3 +89,5 @@ jobs:
           git add version
           git commit -m "Update version to ${{ steps.check_build.outputs.latest_commit }}"
           git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GHTOKEN }}
