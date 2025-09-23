@@ -23,10 +23,10 @@ WORKDIR /build
 RUN git clone https://github.com/pmkol/mosdns-x.git
 WORKDIR /build/mosdns-x
 
-# 检出 commit-hash（如果传入）
+# 检出 commit（如果传入）
 RUN if [ -n "$MOSDNS_COMMIT" ]; then git checkout $MOSDNS_COMMIT; fi
 
-# 编译 mosdns（静态编译）
+# 编译 mosdns，可执行文件输出 /build/mosdns-x/mosdns
 RUN GOOS=linux GOARCH=${TARGETARCH} CGO_ENABLED=0 go build -o mosdns ./main.go
 
 # ====== 运行阶段 ======
