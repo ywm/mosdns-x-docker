@@ -10,13 +10,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout this repository
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Determine if build is needed
         id: check_build
         run: |
-          # 获取最新 upstream commit hash
           LATEST_COMMIT=$(git ls-remote https://github.com/pmkol/mosdns-x.git HEAD | awk '{print $1}')
           echo "Latest upstream commit: $LATEST_COMMIT"
 
@@ -60,8 +59,8 @@ jobs:
           platforms: linux/amd64
           push: true
           build-args: |
-            MOSDNS_COMMIT=$(cat version)
+            MOSDNS_COMMIT=${{ steps.check_build.outputs.latest_commit }}
             TARGETARCH=amd64
           tags: |
-            ghcr.io/${{ github.repository_owner }}/mosdns-x:$(cat version)
-            ghcr.io/${{ github.repository_owner }}/mosdns-x:latest
+            ghcr.io/${{ github.repository_owner }}/mosdns-x-docker:${{ steps.check_build.outputs.latest_commit }}
+            ghcr.io/${{ github.repository_owner }}/mosdns-x-docker:latest
