@@ -84,7 +84,6 @@ docker logs -f mosdns-x
 
 - 与上游 `mosdns-x`：上游提供核心 DNS 引擎；本镜像补充容器化与配置自动化。
 - 与 `easymosdns`：本镜像在构建时即集成其模板与脚本，无需手动下载。
-- 架构：通过 `TARGETARCH` 构建 `amd64`、`arm64` 等主流平台镜像。
 
 ---
 
