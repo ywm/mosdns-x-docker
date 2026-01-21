@@ -32,17 +32,18 @@ RUN GOOS=linux GOARCH=${TARGETARCH} CGO_ENABLED=0 go build -o mosdns ./main.go
 FROM ubuntu:22.04
 ENV DEBIAN_FRONTEND=noninteractive
 
-# 安装运行所需依赖
+# 安装运行所需依赖（添加 curl 用于更新 CA 证书）
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates tzdata git busybox sudo bash \
+    ca-certificates tzdata git busybox curl bash \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# 克隆 easymosdns 默认配置
+# 克隆 easymosdns 默认配置并删除 .git 减小镜像体积
 RUN git clone --depth 1 https://github.com/pmkol/easymosdns.git /opt/easymosdns \
  && chmod +x /opt/easymosdns/rules/update \
- && chmod +x /opt/easymosdns/rules/update-cdn
+ && chmod +x /opt/easymosdns/rules/update-cdn \
+ && rm -rf /opt/easymosdns/.git
 
 # 拷贝 mosdns 可执行文件
 COPY --from=builder /build/mosdns-x/mosdns /usr/bin/mosdns
