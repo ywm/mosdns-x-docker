@@ -10,7 +10,6 @@ on:
 jobs:
   check-and-build:
     runs-on: ubuntu-latest
-
     steps:
       # Checkout 仓库，使用自定义 GHTOKEN
       - name: Checkout this repository
@@ -19,15 +18,16 @@ jobs:
           persist-credentials: false
           token: ${{ secrets.GHTOKEN }}
 
-      # 检查是否需要构建
-      - name: Determine if build is needed
+      # 检查是否需要构建并获取 Go 版本
+      - name: Determine if build is needed and get Go version
         id: check_build
         run: |
           # 获取 upstream 最新 commit hash
           LATEST_COMMIT=$(git ls-remote https://github.com/pmkol/mosdns-x.git HEAD | awk '{print $1}')
           echo "Latest upstream commit: $LATEST_COMMIT"
-
+          
           BUILD_NEEDED=false
+          
           # 如果 version 文件不存在或为空，则需要构建
           if [ ! -f version ] || [ -z "$(cat version)" ]; then
             BUILD_NEEDED=true
@@ -35,12 +35,37 @@ jobs:
             CURRENT_COMMIT=$(cat version)
             [ "$CURRENT_COMMIT" != "$LATEST_COMMIT" ] && BUILD_NEEDED=true
           fi
-
+          
+          # 从上游 go.mod 获取 Go 版本
+          GO_VERSION=$(curl -sL https://raw.githubusercontent.com/pmkol/mosdns-x/main/go.mod | grep -E "^go [0-9]" | awk '{print $2}')
+          
+          # 如果获取失败，使用默认版本
+          if [ -z "$GO_VERSION" ]; then
+            GO_VERSION="1.25.5"
+            echo "Warning: Could not fetch Go version from go.mod, using default: $GO_VERSION"
+          else
+            echo "Detected Go version from upstream: $GO_VERSION"
+          fi
+          
+          # 获取上游提交信息（标题）
+          COMMIT_MESSAGE=$(curl -sL "https://api.github.com/repos/pmkol/mosdns-x/commits/${LATEST_COMMIT}" | grep -m 1 '"message":' | sed 's/.*"message": "\(.*\)",/\1/' | head -1)
+          
+          # 如果获取失败，使用默认信息
+          if [ -z "$COMMIT_MESSAGE" ]; then
+            COMMIT_MESSAGE="Update mosdns-x"
+            echo "Warning: Could not fetch commit message, using default"
+          else
+            echo "Upstream commit message: $COMMIT_MESSAGE"
+          fi
+          
           # 保存用于 Docker tag 的 commit-hash + 日期
           DOCKER_TAG="${LATEST_COMMIT}_$(date +'%Y%m%d')"
+          
           echo "DOCKER_TAG=$DOCKER_TAG" >> $GITHUB_OUTPUT
           echo "build_needed=$BUILD_NEEDED" >> $GITHUB_OUTPUT
           echo "latest_commit=$LATEST_COMMIT" >> $GITHUB_OUTPUT
+          echo "go_version=$GO_VERSION" >> $GITHUB_OUTPUT
+          echo "commit_message=$COMMIT_MESSAGE" >> $GITHUB_OUTPUT
 
       # 如果不需要构建则退出
       - name: Exit if no build needed
@@ -75,6 +100,7 @@ jobs:
           build-args: |
             MOSDNS_COMMIT=${{ steps.check_build.outputs.latest_commit }}
             TARGETARCH=amd64
+            GO_VERSION=${{ steps.check_build.outputs.go_version }}
           tags: |
             ghcr.io/${{ github.repository_owner }}/mosdns-x-docker:${{ steps.check_build.outputs.DOCKER_TAG }}
             ghcr.io/${{ github.repository_owner }}/mosdns-x-docker:latest
@@ -87,7 +113,11 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add version
-          git commit -m "Update version to ${{ steps.check_build.outputs.latest_commit }}"
+          
+          # 构造 commit message: 提交信息 - commit短hash - Go版本
+          SHORT_COMMIT=$(echo "${{ steps.check_build.outputs.latest_commit }}" | cut -c1-7)
+          git commit -m "${{ steps.check_build.outputs.commit_message }} - ${SHORT_COMMIT} - Go ${{ steps.check_build.outputs.go_version }}"
+          
           git push https://x-access-token:${{ secrets.GHTOKEN }}@github.com/${{ github.repository_owner }}/mosdns-x-docker.git HEAD:main
         env:
           GITHUB_TOKEN: ${{ secrets.GHTOKEN }}

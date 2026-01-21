@@ -1,18 +1,16 @@
 # ====== 构建阶段 ======
 FROM ubuntu:22.04 AS builder
-
 ARG TARGETARCH=amd64
 ARG MOSDNS_COMMIT=""
-
+ARG GO_VERSION=1.25.5
 ENV DEBIAN_FRONTEND=noninteractive
-ARG GO_VERSION=1.25.1
 
 # 安装构建依赖
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git curl build-essential ca-certificates bash \
  && rm -rf /var/lib/apt/lists/*
 
-# 安装官方 Go 1.25.1
+# 安装官方 Go(版本由 ARG 传入)
 RUN curl -sSL https://golang.org/dl/go${GO_VERSION}.linux-amd64.tar.gz | tar -C /usr/local -xzf - \
  && ln -s /usr/local/go/bin/go /usr/bin/go \
  && go version
@@ -21,17 +19,17 @@ WORKDIR /build
 
 # 克隆 mosdns-x 源码
 RUN git clone https://github.com/pmkol/mosdns-x.git
+
 WORKDIR /build/mosdns-x
 
-# 检出 commit（如果传入）
+# 检出 commit(如果传入)
 RUN if [ -n "$MOSDNS_COMMIT" ]; then git checkout $MOSDNS_COMMIT; fi
 
-# 编译 mosdns，可执行文件输出 /build/mosdns-x/mosdns
+# 编译 mosdns,可执行文件输出 /build/mosdns-x/mosdns
 RUN GOOS=linux GOARCH=${TARGETARCH} CGO_ENABLED=0 go build -o mosdns ./main.go
 
 # ====== 运行阶段 ======
 FROM ubuntu:22.04
-
 ENV DEBIAN_FRONTEND=noninteractive
 
 # 安装运行所需依赖
