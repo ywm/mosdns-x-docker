@@ -4,13 +4,31 @@ on:
   # 每天凌晨3点定时运行
   schedule:
     - cron: '0 3 * * *'
-  # 手动触发
+  # 手动触发（只有仓库协作者可以触发）
   workflow_dispatch:
 
 jobs:
   check-and-build:
     runs-on: ubuntu-latest
+    
     steps:
+      # 安全检查：只允许特定用户手动触发
+      - name: Security check for manual triggers
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          # 设置允许手动触发的用户列表
+          ALLOWED_USERS="ywm"  # 你的 GitHub 用户名
+          
+          TRIGGER_USER="${{ github.actor }}"
+          
+          if [[ ! "$ALLOWED_USERS" =~ (^|[[:space:]])"$TRIGGER_USER"($|[[:space:]]) ]]; then
+            echo "❌ Error: User '$TRIGGER_USER' is not authorized to manually trigger this workflow."
+            echo "Allowed users: $ALLOWED_USERS"
+            exit 1
+          fi
+          
+          echo "✅ User '$TRIGGER_USER' is authorized to trigger this workflow."
+
       # Checkout 仓库，使用自定义 GHTOKEN
       - name: Checkout this repository
         uses: actions/checkout@v4
@@ -36,6 +54,12 @@ jobs:
             [ "$CURRENT_COMMIT" != "$LATEST_COMMIT" ] && BUILD_NEEDED=true
           fi
           
+          # 手动触发时强制构建
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "Manual trigger detected, forcing build..."
+            BUILD_NEEDED=true
+          fi
+          
           # 从上游 go.mod 获取 Go 版本
           GO_VERSION=$(curl -sL https://raw.githubusercontent.com/pmkol/mosdns-x/main/go.mod | grep -E "^go [0-9]" | awk '{print $2}')
           
@@ -59,7 +83,8 @@ jobs:
           fi
           
           # 保存用于 Docker tag 的 commit-hash + 日期
-          DOCKER_TAG="${LATEST_COMMIT}_$(date +'%Y%m%d')"
+          SHORT_COMMIT=$(echo "$LATEST_COMMIT" | cut -c1-7)
+          DOCKER_TAG="${SHORT_COMMIT}_$(date +'%Y%m%d')"
           
           echo "DOCKER_TAG=$DOCKER_TAG" >> $GITHUB_OUTPUT
           echo "build_needed=$BUILD_NEEDED" >> $GITHUB_OUTPUT
@@ -88,7 +113,15 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GHTOKEN }}
 
-      # 构建并推送 Docker 镜像
+      # 登录 Docker Hub
+      - name: Login to Docker Hub
+        if: steps.check_build.outputs.build_needed == 'true'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+
+      # 构建并推送 Docker 镜像到两个 Registry
       - name: Build and push Docker image
         if: steps.check_build.outputs.build_needed == 'true'
         uses: docker/build-push-action@v6
@@ -104,6 +137,8 @@ jobs:
           tags: |
             ghcr.io/${{ github.repository_owner }}/mosdns-x-docker:${{ steps.check_build.outputs.DOCKER_TAG }}
             ghcr.io/${{ github.repository_owner }}/mosdns-x-docker:latest
+            ${{ secrets.DOCKER_HUB_USERNAME }}/mosdns-x:${{ steps.check_build.outputs.DOCKER_TAG }}
+            ${{ secrets.DOCKER_HUB_USERNAME }}/mosdns-x:latest
 
       # 构建成功后更新 version 文件并推送到仓库
       - name: Update version file and commit
