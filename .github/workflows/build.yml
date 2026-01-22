@@ -137,8 +137,8 @@ jobs:
           tags: |
             ghcr.io/${{ github.repository_owner }}/mosdns-x-docker:${{ steps.check_build.outputs.DOCKER_TAG }}
             ghcr.io/${{ github.repository_owner }}/mosdns-x-docker:latest
-            ${{ secrets.DOCKER_HUB_USERNAME }}/mosdns-x:${{ steps.check_build.outputs.DOCKER_TAG }}
-            ${{ secrets.DOCKER_HUB_USERNAME }}/mosdns-x:latest
+            ${{ secrets.DOCKER_HUB_USERNAME }}/mosdns-x-docker:${{ steps.check_build.outputs.DOCKER_TAG }}
+            ${{ secrets.DOCKER_HUB_USERNAME }}/mosdns-x-docker:latest
 
       # 构建成功后更新 version 文件并推送到仓库
       - name: Update version file and commit
