@@ -147,11 +147,6 @@ services:
    - 格式：`<上游提交信息> - <短hash> - Go <版本>`
    - 例如：`feat: add new DNS plugin - a1b2c3d - Go 1.25.5`
 
-您也可以手动触发构建：
-
-1. 访问 [Actions 页面](https://github.com/ywm/mosdns-x-docker/actions)
-2. 选择 "Build and Push mosdns-x from Source"
-3. 点击 "Run workflow"
 
 ---
 
