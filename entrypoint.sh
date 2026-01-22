@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # 脚本执行期间，任何命令返回非零退出码时立即终止执行
 set -e
 
@@ -8,14 +8,17 @@ DEFAULT_CONFIG_DIR="/opt/easymosdns"
 
 # --- 步骤一：自动更新 CA 证书 ---
 echo "Updating CA certificates..."
-curl -sSL -o /usr/local/share/ca-certificates/cacert.crt https://curl.se/ca/cacert.pem
-update-ca-certificates
+if curl -fsSL -o /usr/local/share/ca-certificates/cacert.crt https://curl.se/ca/cacert.pem; then
+    update-ca-certificates
+else
+    echo "WARNING: Failed to update CA certificates, using existing ones."
+fi
 
 # --- 步骤二：初始化配置 ---
 # 检查目标配置目录 /etc/mosdns 是否为空
-if [ -z "$(ls -A $CONFIG_DIR 2>/dev/null)" ]; then
+if [ -d "$CONFIG_DIR" ] && [ -z "$(find "$CONFIG_DIR" -mindepth 1 -maxdepth 1 2>/dev/null)" ]; then
     echo "$CONFIG_DIR is empty. Populating with default configuration..."
-    cp -rT "$DEFAULT_CONFIG_DIR/" "$CONFIG_DIR/"
+    cp -r "$DEFAULT_CONFIG_DIR/." "$CONFIG_DIR/"
     echo "Default configuration copied."
 fi
 
@@ -23,7 +26,7 @@ fi
 # 检查 /data/config.yaml 文件是否存在（用于挂载自定义配置）
 if [ -f "/data/config.yaml" ]; then
     echo "Applying custom configuration file..."
-    cp -fv /data/config.yaml "$CONFIG_DIR/"
+    cp -fv "/data/config.yaml" "$CONFIG_DIR/"
 fi
 
 # --- 步骤四：确保更新脚本存在 ---
@@ -66,7 +69,7 @@ if [ -f "$CRON_TEMP" ] && [ -s "$CRON_TEMP" ]; then
     # 安装 crontab
     crontab "$CRON_TEMP"
     rm -f "$CRON_TEMP"
-    
+
     echo "Starting cron daemon..."
     # Ubuntu 使用 cron 而不是 crond
     service cron start

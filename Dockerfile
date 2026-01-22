@@ -45,7 +45,7 @@ RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} CGO_ENABLED=0 go build -o mosdns ./mai
  && echo "Built mosdns for ${TARGETOS}/${TARGETARCH}"
 
 # ====== 运行阶段 ======
-FROM ubuntu:22.04
+FROM --platform=$TARGETPLATFORM ubuntu:22.04
 ENV DEBIAN_FRONTEND=noninteractive
 
 # 安装运行所需依赖（添加 cron 用于定时任务）
