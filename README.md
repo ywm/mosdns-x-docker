@@ -29,7 +29,7 @@
 
 ```sh
 docker run -d \
-  --name mosdns-x \
+  --name mosdns-x-docker \
   -p 53:53/udp -p 53:53/tcp \
   -v /your/config/dir:/etc/mosdns \
   -e crontab="0 4 * * *" \
@@ -42,7 +42,7 @@ docker run -d \
 
 ```sh
 docker run -d \
-  --name mosdns-x \
+  --name mosdns-x-docker \
   -p 53:53/udp -p 53:53/tcp \
   -v /your/config/dir:/etc/mosdns \
   -e crontab="0 4 * * *" \
@@ -72,9 +72,9 @@ docker logs -f mosdns-x
 version: '3.8'
 
 services:
-  mosdns-x:
+  mosdns-x-docker:
     image: ghcr.io/ywm/mosdns-x-docker:latest
-    container_name: mosdns-x
+    container_name: mosdns-x-docker
     restart: unless-stopped
     ports:
       - "53:53/udp"
@@ -160,17 +160,17 @@ services:
 
 1. 确认已设置 `crontab` 或 `crontabcnd` 环境变量
 2. 检查 `/etc/mosdns/rules/update*` 是否存在且可执行
-3. 查看容器日志：`docker logs mosdns-x`
-4. 进入容器检查 crontab：`docker exec mosdns-x cat /etc/crontabs/root`
+3. 查看容器日志：`docker logs mosdns-x-docker`
+4. 进入容器检查 crontab：`docker exec mosdns-x-docker cat /etc/crontabs/root`
 
 ### 如何手动更新规则？
 
 ```sh
 # GitHub 直连更新
-docker exec mosdns-x /etc/mosdns/rules/update
+docker exec mosdns-x-docker /etc/mosdns/rules/update
 
 # CDN 加速更新
-docker exec mosdns-x /etc/mosdns/rules/update-cdn
+docker exec mosdns-x-docker /etc/mosdns/rules/update-cdn
 ```
 
 ### 如何查看当前镜像版本？
@@ -180,16 +180,16 @@ docker exec mosdns-x /etc/mosdns/rules/update-cdn
 docker inspect ghcr.io/ywm/mosdns-x-docker:latest | grep -A 5 "Labels"
 
 # 查看 mosdns 版本
-docker exec mosdns-x /usr/bin/mosdns version
+docker exec mosdns-x-docker /usr/bin/mosdns version
 ```
 
 ### 如何排查问题？
 
-1. 先查看容器日志：`docker logs -f mosdns-x`
-2. 检查配置文件：`docker exec mosdns-x cat /etc/mosdns/config.yaml`
-3. 检查 crontab：`docker exec mosdns-x cat /etc/crontabs/root`
-4. 检查目录结构：`docker exec mosdns-x ls -la /etc/mosdns`
-5. 进入容器调试：`docker exec -it mosdns-x sh`
+1. 先查看容器日志：`docker logs -f mosdns-x-docker`
+2. 检查配置文件：`docker exec mosdns-x-docker cat /etc/mosdns/config.yaml`
+3. 检查 crontab：`docker exec mosdns-x-docker cat /etc/crontabs/root`
+4. 检查目录结构：`docker exec mosdns-x-docker ls -la /etc/mosdns`
+5. 进入容器调试：`docker exec -it mosdns-x-docker sh`
 
 ### 为什么选择源码编译而不是预编译版本？
 
