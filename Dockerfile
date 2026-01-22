@@ -5,6 +5,7 @@ FROM --platform=$BUILDPLATFORM ubuntu:22.04 AS builder
 ARG TARGETPLATFORM
 ARG TARGETOS
 ARG TARGETARCH
+ARG BUILDPLATFORM
 ARG MOSDNS_COMMIT=""
 ARG GO_VERSION=1.25.5
 
@@ -16,19 +17,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
  && rm -rf /var/lib/apt/lists/*
 
 # 根据目标架构下载对应的 Go
-RUN set -ex; \
-    ARCH=${TARGETARCH}; \
-    case "${TARGETARCH}" in \
-        amd64) ARCH="amd64" ;; \
-        arm64) ARCH="arm64" ;; \
-        *) echo "Unsupported architecture: ${TARGETARCH}" && exit 1 ;; \
-    esac; \
-    echo "Downloading Go ${GO_VERSION} for ${ARCH}..."; \
-    curl -sSL "https://golang.org/dl/go${GO_VERSION}.linux-${ARCH}.tar.gz" -o /tmp/go.tar.gz && \
+RUN case "$(uname -m)" in \
+        x86_64) BUILD_ARCH="amd64" ;; \
+        aarch64) BUILD_ARCH="arm64" ;; \
+        *) echo "Unsupported build architecture" && exit 1 ;; \
+    esac && \
+    echo "Installing Go ${GO_VERSION} for build platform (${BUILD_ARCH})..." && \
+    curl -fsSL "https://golang.org/dl/go${GO_VERSION}.linux-${BUILD_ARCH}.tar.gz" -o /tmp/go.tar.gz && \
     tar -C /usr/local -xzf /tmp/go.tar.gz && \
-    rm /tmp/go.tar.gz && \
-    ln -s /usr/local/go/bin/go /usr/bin/go && \
-    go version
+    rm /tmp/go.tar.gz   
+
+ENV PATH="/usr/local/go/bin:${PATH}"
+
+RUN  go version
 
 WORKDIR /build
 
@@ -41,11 +42,14 @@ WORKDIR /build/mosdns-x
 RUN if [ -n "$MOSDNS_COMMIT" ]; then git checkout $MOSDNS_COMMIT; fi
 
 # 交叉编译 mosdns
-RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} CGO_ENABLED=0 go build -o mosdns ./main.go \
- && echo "Built mosdns for ${TARGETOS}/${TARGETARCH}"
+RUN echo "Building for ${TARGETOS}/${TARGETARCH}..." && \
+    GOOS=${TARGETOS} GOARCH=${TARGETARCH} CGO_ENABLED=0 go build -o mosdns ./main.go && \
+    ls -lh mosdns && \
+    echo "Built mosdns for ${TARGETOS}/${TARGETARCH}"
+
 
 # ====== 运行阶段 ======
-FROM --platform=$TARGETPLATFORM ubuntu:22.04
+FROM ubuntu:22.04
 ENV DEBIAN_FRONTEND=noninteractive
 
 # 安装运行所需依赖（添加 cron 用于定时任务）
