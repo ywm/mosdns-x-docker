@@ -121,18 +121,17 @@ jobs:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
 
-      # 构建并推送 Docker 镜像到两个 Registry
+      # 构建并推送 Docker 镜像到两个 Registry（支持多架构）
       - name: Build and push Docker image
         if: steps.check_build.outputs.build_needed == 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
-          platforms: linux/amd64
+          platforms: linux/amd64,linux/arm64
           push: true
           build-args: |
             MOSDNS_COMMIT=${{ steps.check_build.outputs.latest_commit }}
-            TARGETARCH=amd64
             GO_VERSION=${{ steps.check_build.outputs.go_version }}
           tags: |
             ghcr.io/${{ github.repository_owner }}/mosdns-x-docker:${{ steps.check_build.outputs.DOCKER_TAG }}
