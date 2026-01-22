@@ -16,13 +16,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
  && rm -rf /var/lib/apt/lists/*
 
 # 根据目标架构下载对应的 Go
-RUN ARCH=${TARGETARCH}; \
-    if [ "${TARGETARCH}" = "amd64" ]; then ARCH="amd64"; fi; \
-    if [ "${TARGETARCH}" = "arm64" ]; then ARCH="arm64"; fi; \
+RUN set -ex; \
+    ARCH=${TARGETARCH}; \
+    case "${TARGETARCH}" in \
+        amd64) ARCH="amd64" ;; \
+        arm64) ARCH="arm64" ;; \
+        *) echo "Unsupported architecture: ${TARGETARCH}" && exit 1 ;; \
+    esac; \
     echo "Downloading Go ${GO_VERSION} for ${ARCH}..."; \
-    curl -sSL https://golang.org/dl/go${GO_VERSION}.linux-${ARCH}.tar.gz | tar -C /usr/local -xzf - \
- && ln -s /usr/local/go/bin/go /usr/bin/go \
- && go version
+    curl -sSL "https://golang.org/dl/go${GO_VERSION}.linux-${ARCH}.tar.gz" -o /tmp/go.tar.gz && \
+    tar -C /usr/local -xzf /tmp/go.tar.gz && \
+    rm /tmp/go.tar.gz && \
+    ln -s /usr/local/go/bin/go /usr/bin/go && \
+    go version
 
 WORKDIR /build
 
