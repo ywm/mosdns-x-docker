@@ -32,9 +32,9 @@ RUN GOOS=linux GOARCH=${TARGETARCH} CGO_ENABLED=0 go build -o mosdns ./main.go
 FROM ubuntu:22.04
 ENV DEBIAN_FRONTEND=noninteractive
 
-# 安装运行所需依赖（添加 curl 用于更新 CA 证书）
+# 安装运行所需依赖（添加 cron 用于定时任务）
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates tzdata git busybox curl bash \
+    ca-certificates tzdata git cron curl bash \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

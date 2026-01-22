@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # 脚本执行期间，任何命令返回非零退出码时立即终止执行
 set -e
 
@@ -43,28 +43,36 @@ echo "Redirecting log to stdout..."
 ln -sf /dev/stdout "$LOG_FILE_PATH"
 
 # --- 步骤六：配置定时任务 ---
-CRONTAB_FILE="/etc/crontabs/root"
 echo "Initializing cron jobs..."
-> "$CRONTAB_FILE"  # 清空 crontab 文件
+
+# Ubuntu 使用标准 cron，需要使用 crontab 命令而不是直接写文件
+CRON_TEMP="/tmp/crontab.tmp"
+> "$CRON_TEMP"  # 创建临时文件
 
 # 添加规则更新定时任务
 if [ -n "$crontab" ]; then
-    echo "$crontab $CONFIG_DIR/rules/update >> /proc/1/fd/1 2>&1" >> "$CRONTAB_FILE"
+    echo "$crontab $CONFIG_DIR/rules/update >> /proc/1/fd/1 2>&1" >> "$CRON_TEMP"
     echo "  -> Scheduled direct update: '$crontab'"
 fi
 
 # 添加 CDN 规则更新定时任务（不会覆盖上面的任务）
 if [ -n "$crontabcnd" ]; then
-    echo "$crontabcnd $CONFIG_DIR/rules/update-cdn >> /proc/1/fd/1 2>&1" >> "$CRONTAB_FILE"
+    echo "$crontabcnd $CONFIG_DIR/rules/update-cdn >> /proc/1/fd/1 2>&1" >> "$CRON_TEMP"
     echo "  -> Scheduled CDN update: '$crontabcnd'"
 fi
 
 # --- 步骤七：启动 Cron 守护进程 ---
-if [ -f "$CRONTAB_FILE" ] && [ -s "$CRONTAB_FILE" ]; then
+if [ -f "$CRON_TEMP" ] && [ -s "$CRON_TEMP" ]; then
+    # 安装 crontab
+    crontab "$CRON_TEMP"
+    rm -f "$CRON_TEMP"
+    
     echo "Starting cron daemon..."
-    crond -b -l 8
+    # Ubuntu 使用 cron 而不是 crond
+    service cron start
 else
     echo "No cron jobs defined. Skipping cron."
+    rm -f "$CRON_TEMP"
 fi
 
 # --- 步骤八：启动主服务 ---
