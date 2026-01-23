@@ -38,7 +38,7 @@ docker run -d \
 
 ### 从 Docker Hub 拉取
 ```sh
-docker pull ywmdocker/mosdns-x:latest
+docker pull ywmdocker/mosdns-x-docker:latest
 
 docker run -d \
   --name mosdns-x-docker \
