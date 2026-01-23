@@ -36,6 +36,20 @@ docker run -d \
   ghcr.io/ywm/mosdns-x-docker:latest
 ```
 
+### 从 Docker Hub 拉取
+```sh
+docker pull ywmdocker/mosdns-x:latest
+
+docker run -d \
+  --name mosdns-x-docker \
+  -p 53:53/udp -p 53:53/tcp \
+  -v /your/config/dir:/etc/mosdns \
+  -e crontab="0 4 * * *" \
+  ywmdocker/mosdns-x-docker:latest
+```
+
+
+
 ### 使用特定版本标签
 
 每次构建会生成带有上游 commit hash 和日期的标签，例如：
@@ -49,6 +63,8 @@ docker run -d \
   ghcr.io/ywm/mosdns-x-docker:a1b2c3d_20260122
 ```
 
+
+
 ### 环境变量说明
 
 - `crontab`：定时运行 `/etc/mosdns/rules/update`（GitHub 直连更新）
@@ -61,7 +77,7 @@ docker run -d \
 ### 查看日志
 
 ```sh
-docker logs -f mosdns-x
+docker logs -f mosdns-x-docker
 ```
 
 ---
