@@ -59,9 +59,9 @@ if [ -n "$crontab" ]; then
 fi
 
 # 添加 CDN 规则更新定时任务（不会覆盖上面的任务）
-if [ -n "$crontabcnd" ]; then
-    echo "$crontabcnd $CONFIG_DIR/rules/update-cdn >> /proc/1/fd/1 2>&1" >> "$CRON_TEMP"
-    echo "  -> Scheduled CDN update: '$crontabcnd'"
+if [ -n "$crontabcdn" ]; then
+    echo "$crontabcdn $CONFIG_DIR/rules/update-cdn >> /proc/1/fd/1 2>&1" >> "$CRON_TEMP"
+    echo "  -> Scheduled CDN update: '$crontabcdn'"
 fi
 
 # --- 步骤七：启动 Cron 守护进程 ---

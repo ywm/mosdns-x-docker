@@ -69,7 +69,7 @@ docker run -d \
 
 - `crontab`：定时运行 `/etc/mosdns/rules/update`（GitHub 直连更新）
   - 示例：`"0 4 * * *"` 表示每天凌晨 4 点更新
-- `crontabcnd`：定时运行 `/etc/mosdns/rules/update-cdn`（CDN 加速更新）
+- `crontabcdn`：定时运行 `/etc/mosdns/rules/update-cdn`（CDN 加速更新）
   - 示例：`"0 3 * * *"` 表示每天凌晨 3 点更新
 - `TZ`：设置时区，影响 cron 执行时间和日志时间
   - 示例：`"Asia/Shanghai"`
@@ -112,7 +112,7 @@ services:
   2. 检测 `/etc/mosdns` 是否为空，空则复制默认配置
   3. 应用自定义配置（如果存在 `/data/config.yaml`）
   4. 确保更新脚本存在且可执行
-  5. 根据 `crontab` 和 `crontabcnd` 环境变量写入 `/etc/crontabs/root`
+  5. 根据 `crontab` 和 `crontabcdn` 环境变量写入 `/etc/crontabs/root`
   6. 启动 `crond` 守护进程
   7. 启动 mosdns 主服务
 - **日志**：定时任务输出重定向到 `/proc/1/fd/1`（stdout），可用 `docker logs` 查看
@@ -125,7 +125,7 @@ services:
 ### 基本配置
 
 - **覆盖配置**：将本地目录挂载到 `/etc/mosdns` 即可覆盖默认模板
-- **定时更新**：使用标准 cron 表达式设置 `crontab` 或 `crontabcnd`
+- **定时更新**：使用标准 cron 表达式设置 `crontab` 或 `crontabcdn`
   - 每天凌晨 4 点：`0 4 * * *`
   - 每 6 小时：`0 */6 * * *`
   - 每周日凌晨 3 点：`0 3 * * 0`
@@ -174,7 +174,7 @@ services:
 
 ### 规则没更新？
 
-1. 确认已设置 `crontab` 或 `crontabcnd` 环境变量
+1. 确认已设置 `crontab` 或 `crontabcdn` 环境变量
 2. 检查 `/etc/mosdns/rules/update*` 是否存在且可执行
 3. 查看容器日志：`docker logs mosdns-x-docker`
 4. 进入容器检查 crontab：`docker exec mosdns-x-docker cat /etc/crontabs/root`
