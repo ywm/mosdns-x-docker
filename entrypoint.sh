@@ -46,13 +46,16 @@ done
 log_to_file=false
 
 if [ -f "$CONFIG_FILE" ]; then
-    # 检查配置文件中是否有 log.file 配置且不为空
-    # 匹配类似: file: "./mosdns.log" 或 file: /path/to/log
-    if grep -qE '^\s*file:\s*["\x27]?\.?/?[a-zA-Z0-9_./-]+["\x27]?\s*$' "$CONFIG_FILE" 2>/dev/null; then
-        # 进一步确认是在 log: 块下的 file 配置
-        if awk '/^log:/{found=1} found && /^\s*file:/{print; exit}' "$CONFIG_FILE" | grep -qE 'file:\s*["\x27]?.+["\x27]?'; then
+    # 使用 sed 提取 log: 块下的 file: 配置
+    # 查找 "log:" 开头的行，然后获取紧跟其后缩进的 "file:" 行
+    log_file_line=$(sed -n '/^log:/,/^[^ ]/{ /^[[:space:]]*file:/p; }' "$CONFIG_FILE" | head -1)
+    
+    if [ -n "$log_file_line" ]; then
+        # 提取 file: 后面的值
+        file_value=$(echo "$log_file_line" | sed 's/.*file:[[:space:]]*//' | sed 's/[[:space:]]*$//' | tr -d '"' | tr -d "'")
+        if [ -n "$file_value" ]; then
             log_to_file=true
-            echo "Detected log file configuration in config.yaml"
+            echo "Detected log file configuration in config.yaml: $file_value"
         fi
     fi
 fi
