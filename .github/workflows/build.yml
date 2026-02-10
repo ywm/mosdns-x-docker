@@ -1,9 +1,9 @@
 name: Build and Push mosdns-x from Source
 
 on:
-  # 每天凌晨3点定时运行
+  # 每天点定时运行
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '0 18 * * *'
   # 手动触发（只有仓库协作者可以触发）
   workflow_dispatch:
 
