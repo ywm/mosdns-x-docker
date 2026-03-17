@@ -55,16 +55,29 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # 安装运行所需依赖（添加 cron 用于定时任务）
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates tzdata git cron curl bash \
+    ca-certificates tzdata git cron curl bash wget \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
 # 克隆 easymosdns 默认配置并删除 .git 减小镜像体积
-RUN git clone --depth 1 https://github.com/pmkol/easymosdns.git /opt/easymosdns \
- && chmod +x /opt/easymosdns/rules/update \
- && chmod +x /opt/easymosdns/rules/update-cdn \
- && rm -rf /opt/easymosdns/.git
+# 支持故障转移：GitHub 克隆失败或超时时自动使用镜像下载
+RUN set -e; \
+    echo "Attempting to clone easymosdns from GitHub..."; \
+    if timeout 30 git clone --depth 1 https://github.com/pmkol/easymosdns.git /opt/easymosdns; then \
+        echo "Successfully cloned from GitHub"; \
+    else \
+        echo "GitHub clone failed or timed out, falling back to mirror..."; \
+        rm -rf /opt/easymosdns; \
+        wget --timeout=60 https://mirror.apad.pro/dns/easymosdns.tar.gz -O /tmp/easymosdns.tar.gz && \
+        mkdir -p /opt/easymosdns && \
+        tar xzf /tmp/easymosdns.tar.gz -C /opt/easymosdns --strip-components=1 && \
+        rm -f /tmp/easymosdns.tar.gz && \
+        echo "Successfully downloaded from mirror"; \
+    fi && \
+    chmod +x /opt/easymosdns/rules/update && \
+    chmod +x /opt/easymosdns/rules/update-cdn && \
+    rm -rf /opt/easymosdns/.git
 
 # 拷贝 mosdns 可执行文件
 COPY --from=builder /build/mosdns-x/mosdns /usr/bin/mosdns
