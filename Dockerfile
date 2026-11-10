@@ -8,6 +8,9 @@ ARG TARGETARCH
 ARG BUILDPLATFORM
 ARG MOSDNS_COMMIT=""
 ARG GO_VERSION=1.25.5
+# 可选：官方安装包的 sha256（由 workflow 从 go.dev/dl 获取），为空时跳过校验
+ARG GO_SHA256_AMD64=""
+ARG GO_SHA256_ARM64=""
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -16,16 +19,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git curl build-essential ca-certificates bash \
  && rm -rf /var/lib/apt/lists/*
 
-# 根据目标架构下载对应的 Go
+# 根据目标架构下载对应的 Go，并在解压前校验 sha256
 RUN case "$(uname -m)" in \
-        x86_64) BUILD_ARCH="amd64" ;; \
-        aarch64) BUILD_ARCH="arm64" ;; \
+        x86_64) BUILD_ARCH="amd64"; GO_SHA256="${GO_SHA256_AMD64}" ;; \
+        aarch64) BUILD_ARCH="arm64"; GO_SHA256="${GO_SHA256_ARM64}" ;; \
         *) echo "Unsupported build architecture" && exit 1 ;; \
     esac && \
     echo "Installing Go ${GO_VERSION} for build platform (${BUILD_ARCH})..." && \
     curl -fsSL "https://golang.org/dl/go${GO_VERSION}.linux-${BUILD_ARCH}.tar.gz" -o /tmp/go.tar.gz && \
+    if [ -n "${GO_SHA256}" ]; then \
+        echo "Verifying Go tarball checksum..." && \
+        echo "${GO_SHA256}  /tmp/go.tar.gz" | sha256sum -c -; \
+    else \
+        echo "WARNING: GO_SHA256 not provided, skipping checksum verification"; \
+    fi && \
     tar -C /usr/local -xzf /tmp/go.tar.gz && \
-    rm /tmp/go.tar.gz   
+    rm /tmp/go.tar.gz
 
 ENV PATH="/usr/local/go/bin:${PATH}"
 

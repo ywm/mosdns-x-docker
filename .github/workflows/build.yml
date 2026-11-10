@@ -44,31 +44,46 @@ jobs:
           LATEST_COMMIT=$(git ls-remote https://github.com/pmkol/mosdns-x.git HEAD | awk '{print $1}')
           echo "Latest upstream commit: $LATEST_COMMIT"
           
-          BUILD_NEEDED=false
-          
-          # 如果 version 文件不存在或为空，则需要构建
-          if [ ! -f version ] || [ -z "$(cat version)" ]; then
-            BUILD_NEEDED=true
-          else
-            CURRENT_COMMIT=$(cat version)
-            [ "$CURRENT_COMMIT" != "$LATEST_COMMIT" ] && BUILD_NEEDED=true
-          fi
-          
-          # 手动触发时强制构建
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "Manual trigger detected, forcing build..."
-            BUILD_NEEDED=true
-          fi
-          
-          # 从上游 go.mod 获取 Go 版本
-          GO_VERSION=$(curl -sL https://raw.githubusercontent.com/pmkol/mosdns-x/main/go.mod | grep -E "^go [0-9]" | awk '{print $2}')
+          # 从上游 go.mod 获取 Go 版本要求
+          # 注意：go 指令是「最低要求」而不是上限，补丁版可以且应该用更新的
+          GO_MIN=$(curl -sL https://raw.githubusercontent.com/pmkol/mosdns-x/main/go.mod | grep -E "^go [0-9]" | awk '{print $2}')
           
           # 如果获取失败，使用默认版本
-          if [ -z "$GO_VERSION" ]; then
-            GO_VERSION="1.25.5"
-            echo "Warning: Could not fetch Go version from go.mod, using default: $GO_VERSION"
+          if [ -z "$GO_MIN" ]; then
+            GO_MIN="1.25.5"
+            echo "Warning: Could not fetch Go version from go.mod, using default: $GO_MIN"
           else
-            echo "Detected Go version from upstream: $GO_VERSION"
+            echo "Upstream requires Go >= $GO_MIN"
+          fi
+          
+          # 在同一 minor 线内取最新的补丁版（包含安全修复），而不是等上游升级 go.mod
+          GO_MINOR=$(echo "$GO_MIN" | cut -d. -f1,2)
+          GO_RELEASES=$(curl -sL "https://go.dev/dl/?mode=json&include=all" || true)
+          GO_VERSION=$(echo "$GO_RELEASES" \
+            | jq -r '.[] | select(.stable) | .version' 2>/dev/null \
+            | grep -E "^go${GO_MINOR//./\\.}\." \
+            | sed 's/^go//' \
+            | sort -V | tail -1)
+          
+          if [ -z "$GO_VERSION" ]; then
+            GO_VERSION="$GO_MIN"
+            echo "Warning: Could not resolve latest patch of Go $GO_MINOR, falling back to $GO_VERSION"
+          else
+            echo "Resolved latest Go patch for minor $GO_MINOR: $GO_VERSION"
+          fi
+          
+          # 取官方安装包的 sha256，构建阶段下载后校验（为空则跳过校验）
+          GO_SHA256_AMD64=$(echo "$GO_RELEASES" \
+            | jq -r --arg f "go${GO_VERSION}.linux-amd64.tar.gz" \
+              '.[] | .files[]? | select(.filename == $f) | .sha256' 2>/dev/null | head -1)
+          GO_SHA256_ARM64=$(echo "$GO_RELEASES" \
+            | jq -r --arg f "go${GO_VERSION}.linux-arm64.tar.gz" \
+              '.[] | .files[]? | select(.filename == $f) | .sha256' 2>/dev/null | head -1)
+          
+          if [ -z "$GO_SHA256_AMD64" ] || [ -z "$GO_SHA256_ARM64" ]; then
+            echo "Warning: Could not resolve Go tarball checksums, build will skip verification"
+          else
+            echo "Go tarball checksums resolved"
           fi
           
           # 获取上游提交信息（标题）
@@ -82,6 +97,30 @@ jobs:
             echo "Upstream commit message: $COMMIT_MESSAGE"
           fi
           
+          # 判断是否需要构建：上游 commit 变化，或 Go 补丁版变化
+          BUILD_NEEDED=false
+          
+          # 如果 version 文件不存在或为空，则需要构建
+          if [ ! -f version ] || [ -z "$(cat version)" ]; then
+            BUILD_NEEDED=true
+          else
+            CURRENT_COMMIT=$(cat version)
+            [ "$CURRENT_COMMIT" != "$LATEST_COMMIT" ] && BUILD_NEEDED=true
+          fi
+          
+          # 记录上次构建使用的 Go 版本，补丁升级（通常是安全修复）同样需要重新打包
+          CURRENT_GO_VERSION=$(cat go-version 2>/dev/null || true)
+          if [ "$CURRENT_GO_VERSION" != "$GO_VERSION" ]; then
+            echo "Go version changed: '${CURRENT_GO_VERSION:-unknown}' -> '$GO_VERSION'"
+            BUILD_NEEDED=true
+          fi
+          
+          # 手动触发时强制构建
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "Manual trigger detected, forcing build..."
+            BUILD_NEEDED=true
+          fi
+          
           # 保存用于 Docker tag 的 commit-hash + 日期
           SHORT_COMMIT=$(echo "$LATEST_COMMIT" | cut -c1-7)
           DOCKER_TAG="${SHORT_COMMIT}_$(date +'%Y%m%d')"
@@ -90,6 +129,8 @@ jobs:
           echo "build_needed=$BUILD_NEEDED" >> $GITHUB_OUTPUT
           echo "latest_commit=$LATEST_COMMIT" >> $GITHUB_OUTPUT
           echo "go_version=$GO_VERSION" >> $GITHUB_OUTPUT
+          echo "go_sha256_amd64=$GO_SHA256_AMD64" >> $GITHUB_OUTPUT
+          echo "go_sha256_arm64=$GO_SHA256_ARM64" >> $GITHUB_OUTPUT
           echo "commit_message=$COMMIT_MESSAGE" >> $GITHUB_OUTPUT
 
       # 如果不需要构建则退出
@@ -138,6 +179,8 @@ jobs:
           build-args: |
             MOSDNS_COMMIT=${{ steps.check_build.outputs.latest_commit }}
             GO_VERSION=${{ steps.check_build.outputs.go_version }}
+            GO_SHA256_AMD64=${{ steps.check_build.outputs.go_sha256_amd64 }}
+            GO_SHA256_ARM64=${{ steps.check_build.outputs.go_sha256_arm64 }}
           tags: |
             ghcr.io/${{ github.repository_owner }}/mosdns-x-docker:${{ steps.check_build.outputs.DOCKER_TAG }}
             ghcr.io/${{ github.repository_owner }}/mosdns-x-docker:latest
@@ -149,9 +192,16 @@ jobs:
         if: steps.check_build.outputs.build_needed == 'true'
         run: |
           echo "${{ steps.check_build.outputs.latest_commit }}" > version
+          echo "${{ steps.check_build.outputs.go_version }}" > go-version
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add version
+          git add version go-version
+          
+          # 强制重建时版本可能没有变化，此时无需提交
+          if git diff --cached --quiet; then
+            echo "No version changes to commit."
+            exit 0
+          fi
           
           # 构造 commit message: 提交信息 - commit短hash - Go版本
           SHORT_COMMIT=$(echo "${{ steps.check_build.outputs.latest_commit }}" | cut -c1-7)

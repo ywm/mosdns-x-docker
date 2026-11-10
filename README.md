@@ -149,12 +149,12 @@ services:
 
 1. **每日检测**：每天凌晨 3 点自动运行检测任务
 2. **版本对比**：
-   - 获取上游 `pmkol/mosdns-x` 的最新 commit hash
-   - 获取上游 `go.mod` 中要求的 Go 版本
-   - 与本地 `version` 文件对比
+   - 获取上游 `pmkol/mosdns-x` 的最新 commit hash，与本地 `version` 文件对比
+   - 从上游 `go.mod` 读出 Go 的**最低**版本要求，再取同一 minor 线的最新补丁版（例如 go.mod 写 `go 1.26.3`，实际使用 `1.26.10`），与本地 `go-version` 文件对比
+   - Go 补丁版有更新（通常包含安全修复）同样触发重新构建，无需等待上游升级 go.mod
 3. **按需构建**：
-   - 如果上游有新 commit，触发构建
-   - 使用检测到的 Go 版本进行编译
+   - 如果上游有新 commit 或 Go 补丁版有更新，触发构建
+   - 使用解析出的 Go 版本编译，并校验官方安装包的 sha256
    - 推送到 GitHub Container Registry
 4. **标签命名**：
    - `latest`：始终指向最新构建
